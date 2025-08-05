@@ -104,6 +104,23 @@ REST_FRAMEWORK = {
 }
 
 
+# EMAIL_HOST = 'skaalfarms.com'           # Matches the certificate
+# EMAIL_PORT = 465                       # SSL/TLS port
+# EMAIL_HOST_USER = 'chat-test@skaalfarms.com'
+# EMAIL_HOST_PASSWORD = 'Gh#[~MQ^C5HTZjXN'
+# EMAIL_USE_SSL = True                   # Use SSL (not TLS)
+# EMAIL_USE_TLS = False                  # Make sure this is False
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'mail.skaalfarms.com'   # ✅ Use the full mail server, not just the domain
+EMAIL_PORT = 465                     # ✅ SMTP SSL Port
+EMAIL_HOST_USER = 'chat-test@skaalfarms.com'
+EMAIL_HOST_PASSWORD = 'Gh#[~MQ^C5HTZjXN'
+EMAIL_USE_SSL = True                 # ✅ Since using port 465
+EMAIL_USE_TLS = False                # ✅ TLS should be False if SSL is True
+DEFAULT_FROM_EMAIL = 'chat-test@skaalfarms.com'
+
+
 
 
 # Password validation
