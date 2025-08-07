@@ -14,6 +14,12 @@ from .serializers import RegisterSerializer
 from .utils import account_activation_token
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
+from django.conf import settings
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import CustomTokenObtainPairSerializer
+from django.utils.timezone import now
+from datetime import timedelta
+
 
 class RegisterView(APIView):
   def post(self, request):
@@ -23,7 +29,9 @@ class RegisterView(APIView):
       uid = urlsafe_base64_encode(force_bytes(user.pk))
       token = account_activation_token.make_token(user)
 
-      activation_link = f"http://127.0.0.1:8000/activate/{uid}/{token}/"
+      domain = request.get_host()  # dynamically get current host
+      scheme = "https" if request.is_secure() else "http"
+      activation_link = f"{scheme}://{domain}/activate/{uid}/{token}/"
 
       send_mail(
         "Activate your account",
@@ -52,6 +60,7 @@ class ActivateView(APIView):
       return Response({'error': 'Invalid or expired token'}, status=400)
 
 
+
 class ResendActivationView(APIView):
   permission_classes = [AllowAny]
 
@@ -64,7 +73,10 @@ class ResendActivationView(APIView):
 
       uid = urlsafe_base64_encode(force_bytes(user.pk))
       token = account_activation_token.make_token(user)
-      activation_link = f"http://127.0.0.1:8000/activate/{uid}/{token}/"
+
+      domain = request.get_host()
+      scheme = "https" if request.is_secure() else "http"
+      activation_link = f"{scheme}://{domain}/activate/{uid}/{token}/"
 
       send_mail(
         "Resend Activation Link",
@@ -80,18 +92,92 @@ class ResendActivationView(APIView):
 
 
 class LogoutView(APIView):
-  permission_classes = [AllowAny]  # allow logout even if token is expired
+    permission_classes = [AllowAny]
 
-  def post(self, request):
-    refresh_token = request.data.get("refresh")
+    def post(self, request):
+        refresh_token = request.COOKIES.get("refresh_token")
 
-    if not refresh_token:
-      return Response({"error": "Refresh token is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not refresh_token:
+            return Response({"error": "Refresh token is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-    try:
-      token = RefreshToken(refresh_token)
-      token.blacklist()
-      return Response({"message": "Token blacklisted successfully."}, status=status.HTTP_205_RESET_CONTENT)
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            response = Response({"detail": "Logout successful."}, status=status.HTTP_200_OK)
 
-    except TokenError as e:
-      return Response({"error": "Invalid or expired token."}, status=status.HTTP_400_BAD_REQUEST)
+            # Clear cookies
+            response.delete_cookie("access_token")
+            response.delete_cookie("refresh_token")
+
+            return response
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# class LogoutView(APIView):
+#   permission_classes = [AllowAny]  # allow logout even if token is expired
+
+#   def post(self, request):
+#     refresh_token = request.data.get("refresh")
+
+#     if not refresh_token:
+#       return Response({"error": "Refresh token is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+#     try:
+#       token = RefreshToken(refresh_token)
+#       token.blacklist()
+#       return Response({"message": "Token blacklisted successfully."}, status=status.HTTP_205_RESET_CONTENT)
+
+#     except TokenError as e:
+#       return Response({"error": "Invalid or expired token."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# class CustomTokenObtainPairView(TokenObtainPairView):
+#   serializer_class = CustomTokenObtainPairSerializer
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+  serializer_class = CustomTokenObtainPairSerializer
+
+  def post(self, request, *args, **kwargs):
+    response = super().post(request, *args, **kwargs)
+    data = response.data
+
+    # Extract tokens
+    access = data.get("access")
+    refresh = data.get("refresh")
+
+    if access and refresh:
+      # Set cookies
+      access_token_expiry = now() + timedelta(minutes=5)  # match JWT lifespan
+      refresh_token_expiry = now() + timedelta(days=1)
+
+      response.set_cookie(
+        "access_token",
+        access,
+        expires=access_token_expiry,
+        httponly=True,
+        secure=False,  # ✅ Set to True in production
+        samesite="Lax"
+      )
+
+      response.set_cookie(
+        "refresh_token",
+        refresh,
+        expires=refresh_token_expiry,
+        httponly=True,
+        secure=False,  # ✅ Set to True in production
+        samesite="Lax"
+      )
+
+      return response
+
+
+class UserInfoView(APIView):
+  permission_classes = [IsAuthenticated]
+
+  def get(self, request):
+    user = request.user
+    return Response({
+      "id": user.id,
+      "email": user.email,
+    })
