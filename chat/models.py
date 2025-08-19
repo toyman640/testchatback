@@ -1,5 +1,9 @@
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.db import models
+from django.db import models
+from django.conf import settings
+
+User = settings.AUTH_USER_MODEL
 
 class UserManager(BaseUserManager):
   def create_user(self, email, password=None, **extra_fields):
@@ -28,3 +32,25 @@ class User(AbstractBaseUser, PermissionsMixin):
 
   def __str__(self):
     return self.email
+
+
+class Conversation(models.Model):
+  participants = models.ManyToManyField(User, related_name='conversations')
+  created_at = models.DateTimeField(auto_now_add=True)
+
+  def __str__(self):
+    return f"Conversation {self.id}"
+
+  def get_other_user(self, current_user):
+    return self.participants.exclude(id=current_user.id).first()
+
+
+class Message(models.Model):
+  conversation = models.ForeignKey(Conversation, related_name='messages', on_delete=models.CASCADE)
+  sender = models.ForeignKey(User, related_name='sent_messages', on_delete=models.CASCADE)
+  content = models.TextField()
+  timestamp = models.DateTimeField(auto_now_add=True)
+  is_read = models.BooleanField(default=False)
+
+  def __str__(self):
+    return f"From {self.sender.email} at {self.timestamp}"

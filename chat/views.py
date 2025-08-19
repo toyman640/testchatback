@@ -21,18 +21,64 @@ from django.utils.timezone import now
 from datetime import timedelta
 
 
+# class RegisterView(APIView):
+#   def post(self, request):
+#     serializer = RegisterSerializer(data=request.data)
+#     if serializer.is_valid():
+#       user = serializer.save()
+#       uid = urlsafe_base64_encode(force_bytes(user.pk))
+#       token = account_activation_token.make_token(user)
+
+#       frontend_base_url = "http://localhost:5173"
+#       activation_link = f"{frontend_base_url}/account-activated/{uid}/{token}/"
+
+#       # domain = request.get_host()  # dynamically get current host
+#       # scheme = "https" if request.is_secure() else "http"
+#       # activation_link = f"{scheme}://{domain}/activate/{uid}/{token}/"
+
+#       send_mail(
+#         "Activate your account",
+#         f"Click the link to activate: {activation_link}",
+#         settings.DEFAULT_FROM_EMAIL,
+#         [user.email],
+#         fail_silently=False,
+#       )
+
+#       return Response({"message": "Activation email sent."}, status=status.HTTP_201_CREATED)
+#     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 class RegisterView(APIView):
   def post(self, request):
+    email = request.data.get("email")
+
+    # ✅ Check if a user with that email exists
+    existing_user = User.objects.filter(email=email).first()
+    if existing_user:
+      if not existing_user.is_active:
+        return Response(
+          {"error": "Email is registered but not activated. Please check your email for activation link."},
+          status=status.HTTP_400_BAD_REQUEST
+        )
+      else:
+        return Response(
+          {"Note": "Email is already registered and active. Please log in instead."},
+          status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # ✅ Continue with normal registration if no existing user
     serializer = RegisterSerializer(data=request.data)
     if serializer.is_valid():
       user = serializer.save()
+
+      # Generate activation link
       uid = urlsafe_base64_encode(force_bytes(user.pk))
       token = account_activation_token.make_token(user)
 
-      domain = request.get_host()  # dynamically get current host
-      scheme = "https" if request.is_secure() else "http"
-      activation_link = f"{scheme}://{domain}/activate/{uid}/{token}/"
+      frontend_base_url = "http://localhost:5173"
+      activation_link = f"{frontend_base_url}/account-activated/{uid}/{token}/"
 
+      # Send email
       send_mail(
         "Activate your account",
         f"Click the link to activate: {activation_link}",
@@ -41,7 +87,11 @@ class RegisterView(APIView):
         fail_silently=False,
       )
 
-      return Response({"message": "Activation email sent."}, status=status.HTTP_201_CREATED)
+      return Response(
+        {"message": "Activation email sent."},
+        status=status.HTTP_201_CREATED
+      )
+
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ActivateView(APIView):
@@ -74,9 +124,11 @@ class ResendActivationView(APIView):
       uid = urlsafe_base64_encode(force_bytes(user.pk))
       token = account_activation_token.make_token(user)
 
-      domain = request.get_host()
-      scheme = "https" if request.is_secure() else "http"
-      activation_link = f"{scheme}://{domain}/activate/{uid}/{token}/"
+      # domain = request.get_host()
+      # scheme = "https" if request.is_secure() else "http"
+      # activation_link = f"{scheme}://{domain}/activate/{uid}/{token}/"
+      frontend_base_url = "http://localhost:5173"
+      activation_link = f"{frontend_base_url}/account-activated/{uid}/{token}/"
 
       send_mail(
         "Resend Activation Link",
